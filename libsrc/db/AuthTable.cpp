@@ -48,7 +48,10 @@ bool AuthTable::isUserAuthorized(const QString& user, const QString& password)
 
 bool AuthTable::isUserTokenAuthorized(const QString& usr, const QString& token)
 {
-	if(getUserToken(usr) == token.toUtf8())
+	QVariantMap results;
+	getRecord({{"user", usr}}, results, QStringList() << "token");
+
+	if (!results["token"].isNull() && results["token"].toByteArray() == hashToken(token))
 	{
 		updateUserUsed(usr);
 		return true;
@@ -56,20 +59,14 @@ bool AuthTable::isUserTokenAuthorized(const QString& usr, const QString& token)
 	return false;
 }
 
-bool AuthTable::setUserToken(const QString& user)
+QByteArray AuthTable::setUserToken(const QString& user)
 {
+	const QByteArray plainToken = QCryptographicHash::hash(QUuid::createUuid().toByteArray(), QCryptographicHash::Sha512).toHex();
 	QVariantMap map;
-	map["token"] = QCryptographicHash::hash(QUuid::createUuid().toByteArray(), QCryptographicHash::Sha512).toHex();
+	map["token"] = hashToken(plainToken);
 
-	return updateRecord({{"user",user}}, map);
-}
-
-const QByteArray AuthTable::getUserToken(const QString& user)
-{
-	QVariantMap results;
-	getRecord({{"user",user}}, results, QStringList()<<"token");
-
-	return results["token"].toByteArray();
+	updateRecord({{"user", user}}, map);
+	return plainToken;
 }
 
 bool AuthTable::updateUserPassword(const QString& user, const QString& newPassword)

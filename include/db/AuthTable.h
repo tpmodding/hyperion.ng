@@ -50,18 +50,12 @@ public:
 	bool isUserTokenAuthorized(const QString& usr, const QString& token);
 
 	///
-	/// @brief Update token of a user. It's an alternate login path which is replaced on startup. This token is NOT hashed(!)
+	/// @brief Update token of a user. It's an alternate login path which is replaced on startup.
+	///        The token is stored hashed; the plaintext is returned to the caller for session use.
 	/// @param user   The user name
-	/// @return       True on success else false
+	/// @return       The generated plaintext token
 	///
-	bool setUserToken(const QString& user);
-
-	///
-	/// @brief Get token of a user. This token is NOT hashed(!)
-	/// @param user   The user name
-	/// @return       The token
-	///
-	const QByteArray getUserToken(const QString& user);
+	QByteArray setUserToken(const QString& user);
 
 	///
 	/// @brief update password of given user. The user should be tested (isUserAuthorized) to verify this change

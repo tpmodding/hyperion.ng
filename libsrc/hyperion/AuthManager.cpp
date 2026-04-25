@@ -41,8 +41,8 @@ AuthManager::AuthManager(QObject *parent)
 		_authTable->createUser(hyperion::DEFAULT_USER, hyperion::DEFAULT_PASSWORD);
 	}
 
-	// update Hyperion user token on startup
-	_authTable->setUserToken(hyperion::DEFAULT_USER);
+	// update Hyperion user token on startup; keep plaintext in memory, store hash in DB
+	_userSessionToken = _authTable->setUserToken(hyperion::DEFAULT_USER);
 }
 
 void AuthManager::createInstance(QObject *parent)
@@ -99,10 +99,9 @@ QVector<AuthManager::AuthDefinition> AuthManager::getTokenList() const
 	return finalVec;
 }
 
-QString AuthManager::getUserToken(const QString &usr) const
+QString AuthManager::getUserToken(const QString & /*usr*/) const
 {
-	QString tok = _authTable->getUserToken(usr);
-	return QString(_authTable->getUserToken(usr));
+	return _userSessionToken;
 }
 
 void AuthManager::setAuthBlock(bool user)

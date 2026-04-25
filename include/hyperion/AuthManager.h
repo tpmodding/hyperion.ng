@@ -221,6 +221,9 @@ private:
 	/// Database interface for auth table
 	AuthTable *_authTable;
 
+	/// Plaintext user session token (kept in memory; only the hash is persisted in the DB)
+	QString _userSessionToken;
+
 	/// Database interface for meta table
 	MetaTable *_metaTable;
 

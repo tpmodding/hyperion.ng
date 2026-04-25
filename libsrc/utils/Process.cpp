@@ -37,17 +37,7 @@
 	#include <QCoreApplication>
 	#include <QProcess>
 	#include <QStringList>
-
-	#include <unistd.h>
-	#include <cstdio>
 	#include <iostream>
-	#include <memory>
-	#include <stdexcept>
-
-	#include <csignal>
-
-	#include <QDebug>
-	#include <QMetaObject>
 
 	namespace Process
 	{
@@ -73,19 +63,14 @@
 
 		QByteArray command_exec(const QString& cmd, const QByteArray& /*data*/)
 		{
-			char buffer[128];
-			QString result;
+			const int sep = cmd.indexOf(' ');
+			const QString program = (sep < 0) ? cmd : cmd.left(sep);
+			const QStringList args = (sep < 0) ? QStringList() : QStringList{ cmd.mid(sep + 1) };
 
-			std::shared_ptr<FILE> pipe(popen(cmd.toLocal8Bit().constData(), "r"), pclose);
-			if (pipe)
-			{
-				while (!feof(pipe.get()))
-				{
-					if (fgets(buffer, 128, pipe.get()) != nullptr)
-						result += buffer;
-				}
-			}
-			return QSTRING_CSTR(result);
+			QProcess process;
+			process.start(program, args);
+			process.waitForFinished(-1);
+			return process.readAllStandardOutput();
 		}
 	};
 
