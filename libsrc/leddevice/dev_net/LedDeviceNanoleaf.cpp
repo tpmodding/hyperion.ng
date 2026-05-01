@@ -67,6 +67,8 @@ namespace {
 	const char API_EXT_MODE_STRING_V2[] = "{\"write\" : {\"command\" : \"display\", \"animType\" : \"extControl\", \"extControlVersion\" : \"v2\"}}";
 	const char API_STATE[] = "state";
 	const char API_PANELLAYOUT[] = "panelLayout";
+	const char API_LENGTH[] = "length";
+	const char API_LENGTH_NUMLEDS[] = "numLEDs";
 	const char API_EFFECT[] = "effects";
 	const char API_IDENTIFY[] = "identify";
 	const char API_ADD_USER[] = "new";
@@ -238,6 +240,38 @@ bool LedDeviceNanoleaf::initLedsConfiguration()
 	QJsonObject jsonLayout = jsonPanelLayout[PANEL_LAYOUT].toObject();
 
 	_panelLedCount = getHwLedCount(jsonLayout);
+
+	// HD Lightstrip fallback: panel layout has no addressable panels; use /length endpoint
+	if (_panelLedCount == 0)
+	{
+		_restApi->setPath(API_LENGTH);
+		httpResponse lengthResponse = _restApi->get();
+		if (!lengthResponse.error())
+		{
+			int numLEDs = lengthResponse.getBody().object()[API_LENGTH_NUMLEDS].toInt();
+			if (numLEDs > 0)
+			{
+				Debug(_log, "HD Lightstrip detected: %d LEDs (from /length endpoint)", numLEDs);
+				_panelLedCount = numLEDs;
+				_devConfig["hardwareLedCount"] = numLEDs;
+				_panelIds.clear();
+				_panelIds.reserve(numLEDs);
+				for (int idx = 0; idx < numLEDs; ++idx)
+					_panelIds.push_back(idx);
+				// validate and return — no panel-map ordering needed for linear strips
+				int configuredLedCount = this->getLedCount();
+				if (_panelLedCount < configuredLedCount)
+				{
+					QString errorReason = QString("Not enough LEDs [%1] for configured LEDs [%2] found!")
+						.arg(_panelLedCount).arg(configuredLedCount);
+					this->setInError(errorReason, false);
+					return false;
+				}
+				return true;
+			}
+		}
+	}
+
 	_devConfig["hardwareLedCount"] = _panelLedCount;
 
 	int panelNum = jsonLayout[PANEL_NUM].toInt();
