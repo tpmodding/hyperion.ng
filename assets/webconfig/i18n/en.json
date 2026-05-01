@@ -677,6 +677,7 @@
   "edt_dev_spec_brightness_title": "Brightness",
   "edt_dev_spec_candyGamma_title": "'Candy' mode (double gamma correction)",
   "edt_dev_spec_chanperfixture_title": "Channels per Fixture",
+  "edt_dev_spec_channellayout_title": "Channel Layout",
   "edt_dev_spec_cid_title": "CID",
   "edt_dev_spec_clientKey_title": "Clientkey",
   "edt_dev_spec_colorComponent_title": "Colour component",
