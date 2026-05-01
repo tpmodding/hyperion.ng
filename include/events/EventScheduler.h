@@ -33,6 +33,8 @@ private:
 	{
 		QTime time;
 		Event action;
+		QString effectName;
+		int effectPriority = 200;
 	};
 
 	bool enable();

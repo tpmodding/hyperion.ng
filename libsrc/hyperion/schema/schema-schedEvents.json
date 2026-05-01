@@ -28,6 +28,20 @@
           },
           "action": {
             "$ref": "schema-eventActions.json"
+          },
+          "effectName": {
+            "type": "string",
+            "title": "edt_conf_sched_effectName_title",
+            "default": "",
+            "propertyOrder": 3
+          },
+          "effectPriority": {
+            "type": "integer",
+            "title": "edt_conf_sched_effectPriority_title",
+            "default": 200,
+            "minimum": 2,
+            "maximum": 253,
+            "propertyOrder": 4
           }
         },
         "additionalProperties": false

@@ -7,6 +7,7 @@
 #include <QDateTime>
 
 #include <events/EventHandler.h>
+#include <hyperion/HyperionIManager.h>
 #include <utils/Logger.h>
 
 EventScheduler::EventScheduler()
@@ -61,6 +62,8 @@ void EventScheduler::handleSettingsUpdate(settings::type type, const QJsonDocume
 		{
 			QString action = item.toObject().value("action").toString();
 			timeEvent.action = stringToEvent(action);
+			timeEvent.effectName = item.toObject().value("effectName").toString();
+			timeEvent.effectPriority = item.toObject().value("effectPriority").toInt(200);
 
 			QString event =  item.toObject().value("event").toString();
 			timeEvent.time = QTime::fromString(event,"hh:mm");
@@ -129,10 +132,38 @@ void EventScheduler::clearTimers()
 
 void EventScheduler::handleEvent(int timerIndex)
 {
-	QTime time = _scheduledEvents.at(timerIndex).time;
-	Event action = _scheduledEvents.at(timerIndex).action;
-	Debug(_log, "Event : \"%s\" triggers action \"%s\"", QSTRING_CSTR(time.toString()), eventToString(action) );
-	if ( action != Event::Unknown )
+	const timeEvent& ev = _scheduledEvents.at(timerIndex);
+	const QTime& time = ev.time;
+	const Event action = ev.action;
+	Debug(_log, "Event : \"%s\" triggers action \"%s\"", QSTRING_CSTR(time.toString()), eventToString(action));
+
+	if (action == Event::StartEffect || action == Event::StopEffect)
+	{
+		if (auto mgr = HyperionIManager::getInstanceWeak().toStrongRef())
+		{
+			if (auto hyperion = mgr->getHyperionInstance(0))
+			{
+				if (action == Event::StartEffect)
+				{
+					Info(_log, "Scheduled effect start: \"%s\" at priority %d", QSTRING_CSTR(ev.effectName), ev.effectPriority);
+					QMetaObject::invokeMethod(hyperion.get(), "setEffect",
+						Qt::QueuedConnection,
+						Q_ARG(QString, ev.effectName),
+						Q_ARG(int, ev.effectPriority),
+						Q_ARG(int, -1),
+						Q_ARG(QString, QString("EventScheduler")));
+				}
+				else
+				{
+					Info(_log, "Scheduled effect stop: clearing priority %d", ev.effectPriority);
+					QMetaObject::invokeMethod(hyperion.get(), "clear",
+						Qt::QueuedConnection,
+						Q_ARG(int, ev.effectPriority));
+				}
+			}
+		}
+	}
+	else if (action != Event::Unknown)
 	{
 		emit signalEvent(action);
 	}

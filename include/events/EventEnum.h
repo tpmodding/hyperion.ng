@@ -17,7 +17,9 @@ enum class Event
 	Restart,
 	Quit,
 	Lock,
-	Unlock
+	Unlock,
+	StartEffect,
+	StopEffect
 };
 
 inline const char* eventToString(Event event)
@@ -35,6 +37,8 @@ inline const char* eventToString(Event event)
 	case Event::Restart:       return "Restart";
 	case Event::Lock:          return "Lock";
 	case Event::Unlock:        return "Unlock";
+	case Event::StartEffect:   return "StartEffect";
+	case Event::StopEffect:    return "StopEffect";
 	case Event::Unknown:
 	default:                   return "Unknown";
 	}
@@ -51,8 +55,10 @@ inline Event stringToEvent(const QString& event)
 	if (event.compare("ToggleIdle")==0)    return Event::ToggleIdle;
 	if (event.compare("Reload")==0)        return Event::Reload;
 	if (event.compare("Restart")==0)       return Event::Restart;
-	if (event.compare("Lock") == 0)        return Event::Lock;
-	if (event.compare("Unlock") == 0)      return Event::Unlock;
+	if (event.compare("Lock") == 0)         return Event::Lock;
+	if (event.compare("Unlock") == 0)       return Event::Unlock;
+	if (event.compare("StartEffect") == 0)  return Event::StartEffect;
+	if (event.compare("StopEffect") == 0)   return Event::StopEffect;
 	return Event::Unknown;
 }
 

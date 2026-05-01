@@ -8,7 +8,9 @@
     "Idle",
     "ResumeIdle",
     "ToggleIdle",
-    "Restart"
+    "Restart",
+    "StartEffect",
+    "StopEffect"
   ],
   "options": {
     "enum_titles": [
@@ -18,7 +20,9 @@
       "edt_conf_enum_action_idle",
       "edt_conf_enum_action_resumeIdle",
       "edt_conf_enum_action_toggleIdle",
-      "edt_conf_enum_action_restart"
+      "edt_conf_enum_action_restart",
+      "edt_conf_enum_action_startEffect",
+      "edt_conf_enum_action_stopEffect"
     ]
   }
 }
