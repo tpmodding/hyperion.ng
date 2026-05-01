@@ -17,7 +17,6 @@ public:
 	/// Construct a OsxFrameGrabber that will capture snapshots with specified dimensions.
 	///
 	/// @param[in] display The index of the display to capture
-
 	///
 	OsxFrameGrabber(int display=kCGDirectMainDisplay);
 	~OsxFrameGrabber() override;
@@ -58,4 +57,19 @@ private:
 
 	/// Reference to the captured display
 	CGDirectDisplayID _display;
+
+#if defined(SDK_15_AVAILABLE)
+	/// SCStream* stored as opaque pointer to keep ObjC out of this C++ header
+	void* _stream;
+	/// HyperionStreamOutput* stored as opaque pointer
+	void* _streamOutput;
+
+	/// Start a persistent SCStream for the given display.
+	/// Calls getShareableContentWithCompletionHandler only once (at setup).
+	/// @return true on success
+	bool startStream(CGDirectDisplayID displayID);
+
+	/// Stop and release the active SCStream.
+	void stopStream();
+#endif
 };
