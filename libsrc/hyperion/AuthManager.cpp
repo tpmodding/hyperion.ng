@@ -41,8 +41,10 @@ AuthManager::AuthManager(QObject *parent)
 		_authTable->createUser(hyperion::DEFAULT_USER, hyperion::DEFAULT_PASSWORD);
 	}
 
-	// update Hyperion user token on startup; keep plaintext in memory, store hash in DB
+	// Regenerate user session token on every startup; old value (plaintext or hash) is
+	// overwritten automatically — no manual DB migration required when upgrading.
 	_userSessionToken = _authTable->setUserToken(hyperion::DEFAULT_USER);
+	Info(Logger::getInstance("AUTH"), "User session token refreshed (stored as hash in DB)");
 }
 
 void AuthManager::createInstance(QObject *parent)
