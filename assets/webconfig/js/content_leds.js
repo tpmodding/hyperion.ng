@@ -284,7 +284,17 @@ function createClassicLedLayoutSimple(ledstop, ledsleft, ledsright, ledsbottom, 
 }
 
 function createClassicLedLayout(params) {
-  var edgeHGap = params.edgeVGap / (16 / 9);
+  // Per-corner gaps (fall back to uniform edgeVGap when not specified)
+  var gapTL = (params.cornergaptl !== undefined && !isNaN(params.cornergaptl)) ? params.cornergaptl : params.edgeVGap;
+  var gapTR = (params.cornergaptr !== undefined && !isNaN(params.cornergaptr)) ? params.cornergaptr : params.edgeVGap;
+  var gapBR = (params.cornergapbr !== undefined && !isNaN(params.cornergapbr)) ? params.cornergapbr : params.edgeVGap;
+  var gapBL = (params.cornergapbl !== undefined && !isNaN(params.cornergapbl)) ? params.cornergapbl : params.edgeVGap;
+  // Horizontal (aspect-ratio-adjusted) components
+  var gapTL_H = gapTL / (16 / 9);
+  var gapTR_H = gapTR / (16 / 9);
+  var gapBR_H = gapBR / (16 / 9);
+  var gapBL_H = gapBL / (16 / 9);
+  var edgeHGap = params.edgeVGap / (16 / 9);  // kept for backward-compat reference
   var ledArray = [];
 
   function createFinalArray(array) {
@@ -338,12 +348,12 @@ function createClassicLedLayout(params) {
   }
 
   function createTopLeds() {
-    var steph = (params.pttrh - params.pttlh - (2 * edgeHGap)) / params.ledstop;
+    var steph = (params.pttrh - params.pttlh - gapTL_H - gapTR_H) / params.ledstop;
     var stepv = (params.pttrv - params.pttlv) / params.ledstop;
 
     for (var i = 0; i < params.ledstop; i++) {
-      var hmin = ovl("-", params.pttlh + (steph * Number([i])) + edgeHGap);
-      var hmax = ovl("+", params.pttlh + (steph * Number([i + 1])) + edgeHGap);
+      var hmin = ovl("-", params.pttlh + (steph * Number([i])) + gapTL_H);
+      var hmax = ovl("+", params.pttlh + (steph * Number([i + 1])) + gapTL_H);
       var vmin = params.pttlv + (stepv * Number([i]));
       var vmax = vmin + params.ledsHDepth;
       createLedArray(hmin, hmax, vmin, vmax);
@@ -352,24 +362,24 @@ function createClassicLedLayout(params) {
 
   function createRightLeds() {
     var steph = (params.ptbrh - params.pttrh) / params.ledsright;
-    var stepv = (params.ptbrv - params.pttrv - (2 * params.edgeVGap)) / params.ledsright;
+    var stepv = (params.ptbrv - params.pttrv - gapTR - gapBR) / params.ledsright;
 
     for (var i = 0; i < params.ledsright; i++) {
       var hmax = params.pttrh + (steph * Number([i + 1]));
       var hmin = hmax - params.ledsVDepth;
-      var vmin = ovl("-", params.pttrv + (stepv * Number([i])) + params.edgeVGap);
-      var vmax = ovl("+", params.pttrv + (stepv * Number([i + 1])) + params.edgeVGap);
+      var vmin = ovl("-", params.pttrv + (stepv * Number([i])) + gapTR);
+      var vmax = ovl("+", params.pttrv + (stepv * Number([i + 1])) + gapTR);
       createLedArray(hmin, hmax, vmin, vmax);
     }
   }
 
   function createBottomLeds() {
-    var steph = (params.ptbrh - params.ptblh - (2 * edgeHGap)) / params.ledsbottom;
+    var steph = (params.ptbrh - params.ptblh - gapBL_H - gapBR_H) / params.ledsbottom;
     var stepv = (params.ptbrv - params.ptblv) / params.ledsbottom;
 
     for (var i = params.ledsbottom - 1; i > -1; i--) {
-      var hmin = ovl("-", params.ptblh + (steph * Number([i])) + edgeHGap);
-      var hmax = ovl("+", params.ptblh + (steph * Number([i + 1])) + edgeHGap);
+      var hmin = ovl("-", params.ptblh + (steph * Number([i])) + gapBL_H);
+      var hmax = ovl("+", params.ptblh + (steph * Number([i + 1])) + gapBL_H);
       var vmax = params.ptblv + (stepv * Number([i]));
       var vmin = vmax - params.ledsHDepth;
       createLedArray(hmin, hmax, vmin, vmax);
@@ -378,13 +388,13 @@ function createClassicLedLayout(params) {
 
   function createLeftLeds() {
     var steph = (params.ptblh - params.pttlh) / params.ledsleft;
-    var stepv = (params.ptblv - params.pttlv - (2 * params.edgeVGap)) / params.ledsleft;
+    var stepv = (params.ptblv - params.pttlv - gapTL - gapBL) / params.ledsleft;
 
     for (var i = params.ledsleft - 1; i > -1; i--) {
       var hmin = params.pttlh + (steph * Number([i]));
       var hmax = hmin + params.ledsVDepth;
-      var vmin = ovl("-", params.pttlv + (stepv * Number([i])) + params.edgeVGap);
-      var vmax = ovl("+", params.pttlv + (stepv * Number([i + 1])) + params.edgeVGap);
+      var vmin = ovl("-", params.pttlv + (stepv * Number([i])) + gapTL);
+      var vmax = ovl("+", params.pttlv + (stepv * Number([i + 1])) + gapTL);
       createLedArray(hmin, hmax, vmin, vmax);
     }
   }
@@ -438,7 +448,10 @@ function createClassicLeds() {
     ledsVDepth: parseInt($("#ip_cl_vdepth").val()) / 100,
     ledsHDepth: parseInt($("#ip_cl_hdepth").val()) / 100,
     edgeVGap: parseInt($("#ip_cl_edgegap").val()) / 100 / 2,
-    //cornerVGap : parseInt($("#ip_cl_cornergap").val())/100/2,
+    cornergaptl: parseInt($("#ip_cl_cornergaptl").val()) / 100 / 2,
+    cornergaptr: parseInt($("#ip_cl_cornergaptr").val()) / 100 / 2,
+    cornergapbr: parseInt($("#ip_cl_cornergapbr").val()) / 100 / 2,
+    cornergapbl: parseInt($("#ip_cl_cornergapbl").val()) / 100 / 2,
     overlap: $("#ip_cl_overlap").val() / 100,
 
     //trapezoid values % -> float
