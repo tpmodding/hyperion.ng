@@ -101,6 +101,9 @@ private:
 	int _artnet_channelsPerFixture = _ledChannelsPerFixture;
 	int _artnet_universe = 1;
 
+	// Channel layout: _channelOrder[dmxSlot] = source index (0=R,1=G,2=B,3=W)
+	uint8_t _channelOrder[4] = {0, 1, 2, 3};
+
 	// RGBW specific members
 	RGBW::WhiteAlgorithm _whiteAlgorithm;
 	ColorRgbw _temp_rgbw{};

@@ -64,6 +64,31 @@ bool LedDeviceUdpArtNet::init(const QJsonObject &deviceConfig)
 		_artnet_channelsPerFixture = _ledChannelsPerFixture;
 	}
 
+	// Parse channel layout: maps each DMX slot to a source channel (0=R,1=G,2=B,3=W)
+	const QString layout = deviceConfig["channelLayout"].toString("RGB").toUpper();
+	bool layoutValid = (layout.size() >= _ledChannelsPerFixture);
+	if (layoutValid)
+	{
+		for (int slot = 0; slot < 4 && slot < layout.size(); ++slot)
+		{
+			switch (layout.at(slot).toLatin1())
+			{
+			case 'R': _channelOrder[slot] = 0; break;
+			case 'G': _channelOrder[slot] = 1; break;
+			case 'B': _channelOrder[slot] = 2; break;
+			case 'W': _channelOrder[slot] = 3; break;
+			default:  layoutValid = false;      break;
+			}
+		}
+	}
+	if (!layoutValid)
+	{
+		Warning(_log, "Invalid channelLayout '%s', falling back to RGB/RGBW order", QSTRING_CSTR(layout));
+		_channelOrder[0] = 0; _channelOrder[1] = 1; _channelOrder[2] = 2; _channelOrder[3] = 3;
+	}
+	Debug(_log, "Channel layout    : %s -> slots [%d,%d,%d,%d]",
+		  QSTRING_CSTR(layout), _channelOrder[0], _channelOrder[1], _channelOrder[2], _channelOrder[3]);
+
 	return true;
 }
 
@@ -139,22 +164,20 @@ int LedDeviceUdpArtNet::write(const QVector<ColorRgb> &ledValues)
 			dmxIdx = 0;
 		}
 
-		if (_whiteAlgorithm == RGBW::WhiteAlgorithm::WHITE_OFF)
-		{
-			artnet_packet.Data[dmxIdx++] = color.red;
-			artnet_packet.Data[dmxIdx++] = color.green;
-			artnet_packet.Data[dmxIdx++] = color.blue;
-		}
-		else
+		// Build source channels: src[0..3] = R,G,B,W
+		uint8_t src[4] = {color.red, color.green, color.blue, 0};
+		if (_whiteAlgorithm != RGBW::WhiteAlgorithm::WHITE_OFF)
 		{
 			RGBW::Rgb_to_Rgbw(color, &_temp_rgbw, _whiteAlgorithm);
-			artnet_packet.Data[dmxIdx++] = _temp_rgbw.red;
-			artnet_packet.Data[dmxIdx++] = _temp_rgbw.green;
-			artnet_packet.Data[dmxIdx++] = _temp_rgbw.blue;
-			artnet_packet.Data[dmxIdx++] = _temp_rgbw.white;
+			src[0] = _temp_rgbw.red;
+			src[1] = _temp_rgbw.green;
+			src[2] = _temp_rgbw.blue;
+			src[3] = _temp_rgbw.white;
 		}
+		for (int slot = 0; slot < _ledChannelsPerFixture; ++slot)
+			artnet_packet.Data[dmxIdx++] = src[_channelOrder[slot]];
 
-		// Skip extra channels if fixture needs more than RGB/RGBW
+		// Skip padding channels if fixture needs more than LED channels
 		dmxIdx += (_artnet_channelsPerFixture - _ledChannelsPerFixture);
 	}
 

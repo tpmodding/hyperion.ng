@@ -29,9 +29,46 @@
       "minimum": 3,
       "propertyOrder": 4
     },
+    "channelLayout": {
+      "type": "string",
+      "title": "edt_dev_spec_channellayout_title",
+      "enum": [
+        "RGB",
+        "RBG",
+        "GRB",
+        "GBR",
+        "BRG",
+        "BGR",
+        "RGBW",
+        "RBGW",
+        "GRBW",
+        "GBRW",
+        "BRGW",
+        "BGRW"
+      ],
+      "default": "RGB",
+      "options": {
+        "enum_titles": [
+          "RGB",
+          "RBG",
+          "GRB",
+          "GBR",
+          "BRG",
+          "BGR",
+          "RGBW",
+          "RBGW",
+          "GRBW",
+          "GBRW",
+          "BRGW",
+          "BGRW"
+        ]
+      },
+      "propertyOrder": 5
+    },
     "whiteAlgorithm": {
       "type": "string",
       "title": "edt_dev_spec_whiteLedAlgor_title",
+      "propertyOrder": 6,
       "enum": [
         "subtract_minimum",
         "sub_min_cool_adjust",
@@ -56,9 +93,8 @@
           "edt_dev_enum_auto_accurate",
           "edt_dev_enum_white_off"
         ]
-      },
-      "propertyOrder": 5
-    },    
+      }
+    },
     "latchTime": {
       "type": "integer",
       "title": "edt_dev_spec_latchtime_title",
@@ -67,7 +103,7 @@
       "minimum": 0,
       "maximum": 1000,
       "access": "expert",
-      "propertyOrder": 6
+      "propertyOrder": 7
     }
   },
   "additionalProperties": true
