@@ -17,6 +17,7 @@
 
 #include <cmath>
 #include <cstddef>
+#include <vector>
 
 // Constants
 namespace {
@@ -94,6 +95,18 @@ public:
 
 	// Retry timer for reinitializing duplication when unavailable/access denied
 	QElapsedTimer lastRetryTimer;
+
+	// All-displays mode: one capture context per output
+	struct OutputCapture {
+		CComPtr<IDXGIOutput1> dxgiOutput1;
+		CComPtr<IDXGIOutputDuplication> duplication;
+		bool frameAcquired = false;
+		int offsetX = 0, offsetY = 0;
+		int srcWidth = 0, srcHeight = 0;
+	};
+	bool allDisplays = false;
+	int virtualWidth = 0, virtualHeight = 0;
+	std::vector<OutputCapture> outputCaptures;
 };
 
 DDAGrabber::DDAGrabber(int display, int cropLeft, int cropRight, int cropTop, int cropBottom)
@@ -241,6 +254,30 @@ bool DDAGrabber::restartCapture()
 		}
 		// Continue with capture setup after setting up the display successfully
 	}
+
+	// Count available outputs to detect the all-displays sentinel index
+	int numOutputs = 0;
+	{
+		CComPtr<IDXGIOutput> tmpOut;
+		while (SUCCEEDED(d->dxgiAdapter->EnumOutputs(numOutputs, &tmpOut)))
+		{ tmpOut.Release(); ++numOutputs; }
+	}
+
+	if (d->display >= numOutputs)
+	{
+		// Release single-display resources before switching to all-displays mode
+		d->desktopDuplication.Release();
+		d->dxgiOutput1.Release();
+		d->allDisplays = true;
+		return restartAllDisplaysCapture(numOutputs);
+	}
+
+	// Switching back from all-displays: release per-output resources
+	for (auto& cap : d->outputCaptures)
+		if (cap.frameAcquired && cap.duplication)
+			SafeReleaseFrame(cap.duplication);
+	d->outputCaptures.clear();
+	d->allDisplays = false;
 
 	HRESULT hr{ S_OK };
 
@@ -424,6 +461,128 @@ bool DDAGrabber::restartCapture()
 	return true;
 }
 
+bool DDAGrabber::restartAllDisplaysCapture(int numOutputs)
+{
+	// Enumerate all outputs and compute the virtual desktop bounding box
+	bool firstOutput = true;
+	int vLeft = 0, vTop = 0, vRight = 0, vBottom = 0;
+
+	struct RawOutput {
+		CComPtr<IDXGIOutput1> output1;
+		int left, top, right, bottom;
+	};
+	std::vector<RawOutput> rawOutputs;
+	rawOutputs.reserve(static_cast<size_t>(numOutputs));
+
+	for (int i = 0; i < numOutputs; ++i)
+	{
+		CComPtr<IDXGIOutput> output;
+		if (FAILED(d->dxgiAdapter->EnumOutputs(i, &output))) continue;
+
+		DXGI_OUTPUT_DESC desc{};
+		if (FAILED(output->GetDesc(&desc))) continue;
+
+		CComPtr<IDXGIOutput1> output1;
+		if (FAILED(output->QueryInterface(&output1))) continue;
+
+		const int l = desc.DesktopCoordinates.left;
+		const int t = desc.DesktopCoordinates.top;
+		const int r = desc.DesktopCoordinates.right;
+		const int b = desc.DesktopCoordinates.bottom;
+
+		if (firstOutput)
+		{
+			vLeft = l; vTop = t; vRight = r; vBottom = b;
+			firstOutput = false;
+		}
+		else
+		{
+			vLeft   = qMin(vLeft, l);   vTop    = qMin(vTop, t);
+			vRight  = qMax(vRight, r);  vBottom = qMax(vBottom, b);
+		}
+		rawOutputs.push_back({output1, l, t, r, b});
+	}
+
+	if (rawOutputs.empty())
+	{
+		setInError("No outputs accessible for all-displays capture");
+		return false;
+	}
+
+	d->virtualWidth  = vRight  - vLeft;
+	d->virtualHeight = vBottom - vTop;
+
+	const int finalWidth  = qMax(1, d->virtualWidth  / _pixelDecimation);
+	const int finalHeight = qMax(1, d->virtualHeight / _pixelDecimation);
+	_width  = finalWidth;
+	_height = finalHeight;
+
+	// Create per-output duplications
+	d->outputCaptures.clear();
+	for (auto& raw : rawOutputs)
+	{
+		DDAGrabberImpl::OutputCapture cap;
+		cap.dxgiOutput1 = raw.output1;
+		cap.srcWidth  = raw.right  - raw.left;
+		cap.srcHeight = raw.bottom - raw.top;
+		cap.offsetX   = raw.left - vLeft;
+		cap.offsetY   = raw.top  - vTop;
+
+		HRESULT hr = cap.dxgiOutput1->DuplicateOutput(d->device, &cap.duplication);
+		if (FAILED(hr))
+		{
+			Warning(_log, "DuplicateOutput for output at (%d,%d) failed: 0x%x, skipping", raw.left, raw.top, hr);
+			continue;
+		}
+		d->outputCaptures.push_back(std::move(cap));
+	}
+
+	if (d->outputCaptures.empty())
+	{
+		setInError("Failed to create any output duplications for all-displays capture");
+		return false;
+	}
+
+	// Combined GPU render target texture (B8G8R8A8)
+	D3D11_TEXTURE2D_DESC texDesc = {};
+	texDesc.Width  = static_cast<UINT>(finalWidth);
+	texDesc.Height = static_cast<UINT>(finalHeight);
+	texDesc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+	texDesc.MipLevels = 1;
+	texDesc.ArraySize = 1;
+	texDesc.SampleDesc.Count = 1;
+	texDesc.Usage = D3D11_USAGE_DEFAULT;
+	texDesc.BindFlags = D3D11_BIND_RENDER_TARGET;
+
+	d->d2dConvertedTexture.Release();
+	HRESULT hr = d->device->CreateTexture2D(&texDesc, nullptr, &d->d2dConvertedTexture);
+	RETURN_IF_ERROR(hr, "Failed to create combined render-target texture", false);
+
+	texDesc.Usage = D3D11_USAGE_STAGING;
+	texDesc.BindFlags = 0;
+	texDesc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+	d->intermediateTexture.Release();
+	hr = d->device->CreateTexture2D(&texDesc, nullptr, &d->intermediateTexture);
+	RETURN_IF_ERROR(hr, "Failed to create combined staging texture", false);
+
+	CComPtr<IDXGISurface> destSurface;
+	d->d2dConvertedTexture->QueryInterface(&destSurface);
+	d->destBitmap.Release();
+	d->d2dContext->CreateBitmapFromDxgiSurface(destSurface, nullptr, &d->destBitmap);
+
+	// Clear to black so uninitialised areas don't show random GPU data
+	d->d2dContext->SetTarget(d->destBitmap);
+	d->d2dContext->BeginDraw();
+	d->d2dContext->Clear(D2D1::ColorF(D2D1::ColorF::Black));
+	d->d2dContext->EndDraw();
+	d->d2dContext->SetTarget(nullptr);
+
+	Debug(_log, "All-displays capture ready: virtual %dx%d -> output %dx%d, %d outputs active",
+		  d->virtualWidth, d->virtualHeight, finalWidth, finalHeight,
+		  static_cast<int>(d->outputCaptures.size()));
+	return true;
+}
+
 bool DDAGrabber::resetDeviceAndCapture()
 {
 	qCDebug(grabber_screen_flow) << "Resetting device and capture for display" << d->display;
@@ -444,6 +603,9 @@ int DDAGrabber::grabFrame(Image<ColorRgb>& image, bool /*forceUpdate*/)
 		qCDebug(grabber_screen_capture) << "Capture is disabled";
 		return -1;
 	}
+
+	if (d->allDisplays)
+		return grabAllDisplaysFrame(image);
 
 	if (!d->desktopDuplication)
 	{
@@ -645,6 +807,119 @@ int DDAGrabber::grabFrame(Image<ColorRgb>& image, bool /*forceUpdate*/)
 	return 0;
 }
 
+int DDAGrabber::grabAllDisplaysFrame(Image<ColorRgb>& image)
+{
+	if (d->outputCaptures.empty())
+	{
+		if (d->lastRetryTimer.hasExpired(RETRY_INTERVAL.count()))
+		{
+			restartCapture();
+			d->lastRetryTimer.restart();
+		}
+		return -1;
+	}
+
+	bool anyNewFrame = false;
+
+	// Compute scale from virtual desktop to render target
+	const float scaleX = d->virtualWidth  > 0 ? static_cast<float>(_width)  / static_cast<float>(d->virtualWidth)  : 1.0f;
+	const float scaleY = d->virtualHeight > 0 ? static_cast<float>(_height) / static_cast<float>(d->virtualHeight) : 1.0f;
+
+	d->d2dContext->SetTarget(d->destBitmap);
+	d->d2dContext->BeginDraw();
+
+	for (auto& cap : d->outputCaptures)
+	{
+		if (!cap.duplication) continue;
+
+		// Release previous frame
+		if (cap.frameAcquired)
+		{
+			SafeReleaseFrame(cap.duplication);
+			cap.frameAcquired = false;
+		}
+
+		CComPtr<IDXGIResource> resource;
+		DXGI_OUTDUPL_FRAME_INFO fi{};
+		HRESULT hr = cap.duplication->AcquireNextFrame(0, &fi, &resource);
+
+		if (hr == DXGI_ERROR_WAIT_TIMEOUT) continue;  // no new frame on this output
+
+		if (hr == DXGI_ERROR_ACCESS_LOST || hr == DXGI_ERROR_INVALID_CALL || hr == DXGI_ERROR_SESSION_DISCONNECTED)
+		{
+			cap.duplication.Release();
+			if (cap.dxgiOutput1)
+				cap.dxgiOutput1->DuplicateOutput(d->device, &cap.duplication);
+			continue;
+		}
+
+		if (FAILED(hr)) continue;
+
+		cap.frameAcquired = true;
+
+		if (fi.AccumulatedFrames == 0)
+		{
+			SafeReleaseFrame(cap.duplication);
+			cap.frameAcquired = false;
+			continue;
+		}
+
+		anyNewFrame = true;
+
+		CComPtr<ID3D11Texture2D> srcTexture;
+		if (FAILED(resource->QueryInterface(&srcTexture))) continue;
+
+		CComPtr<IDXGISurface> srcSurface;
+		srcTexture->QueryInterface(&srcSurface);
+		CComPtr<ID2D1Bitmap1> srcBitmap;
+		d->d2dContext->CreateBitmapFromDxgiSurface(srcSurface, nullptr, &srcBitmap);
+		if (!srcBitmap) continue;
+
+		const D2D1_RECT_F srcRect = D2D1::RectF(0.0f, 0.0f,
+			static_cast<float>(cap.srcWidth), static_cast<float>(cap.srcHeight));
+		const D2D1_RECT_F dstRect = D2D1::RectF(
+			cap.offsetX * scaleX,
+			cap.offsetY * scaleY,
+			(cap.offsetX + cap.srcWidth)  * scaleX,
+			(cap.offsetY + cap.srcHeight) * scaleY);
+
+		d->d2dContext->DrawBitmap(srcBitmap, dstRect, 1.0f, D2D1_INTERPOLATION_MODE_LINEAR, srcRect);
+	}
+
+	d->d2dContext->EndDraw();
+	d->d2dContext->SetTarget(nullptr);
+
+	if (!anyNewFrame) return -1;
+
+	d->deviceContext->CopyResource(d->intermediateTexture, d->d2dConvertedTexture);
+	d->deviceContext->Flush();
+
+	D3D11_MAPPED_SUBRESOURCE mapped;
+	HRESULT hr = d->deviceContext->Map(d->intermediateTexture, 0, D3D11_MAP_READ, 0, &mapped);
+	RETURN_IF_ERROR(hr, "Failed to map combined staging texture", -1);
+
+	ColorRgb* destPtr = image.memptr();
+	const auto* srcPtr = static_cast<const uint8_t*>(mapped.pData);
+
+	for (int y = 0; y < _height; ++y)
+	{
+		const auto* srcRowPtr = static_cast<const uint32_t*>(static_cast<const void*>(srcPtr + y * mapped.RowPitch));
+		ColorRgb* destRowPtr = destPtr + y * _width;
+		for (int x = 0; x < _width; ++x)
+		{
+			const auto* bgra = static_cast<const std::byte*>(static_cast<const void*>(srcRowPtr));
+			destRowPtr->red   = static_cast<uint8_t>(bgra[2]);
+			destRowPtr->green = static_cast<uint8_t>(bgra[1]);
+			destRowPtr->blue  = static_cast<uint8_t>(bgra[0]);
+			++srcRowPtr;
+			++destRowPtr;
+		}
+	}
+
+	d->deviceContext->Unmap(d->intermediateTexture, 0);
+	return 0;
+}
+
 void DDAGrabber::computeCropBox(int sourceWidth, int sourceHeight, D3D11_BOX& box) const
 {
 	switch (d->desktopRotation) {
@@ -700,6 +975,8 @@ QJsonObject DDAGrabber::discover(const QJsonObject& params)
 		setFpsSupported(QJsonArray{1, 5, 10, 15, 20, 25, 30, 40, 50, 60, 120, 144});
 		// Enumerate through the outputs.
 		QJsonArray videoInputs;
+		bool firstOutput = true;
+		int vLeft = 0, vTop = 0, vRight = 0, vBottom = 0;
 		for (int i = 0;; ++i)
 		{
 			CComPtr<IDXGIOutput> output;
@@ -718,9 +995,15 @@ QJsonObject DDAGrabber::discover(const QJsonObject& params)
 				continue;
 			}
 
+			// Track virtual desktop bounds
+			const int l = desc.DesktopCoordinates.left,  t = desc.DesktopCoordinates.top;
+			const int r = desc.DesktopCoordinates.right, b = desc.DesktopCoordinates.bottom;
+			if (firstOutput) { vLeft=l; vTop=t; vRight=r; vBottom=b; firstOutput=false; }
+			else { vLeft=qMin(vLeft,l); vTop=qMin(vTop,t); vRight=qMax(vRight,r); vBottom=qMax(vBottom,b); }
+
 			// Add it to the JSON.
-			const int width = desc.DesktopCoordinates.right - desc.DesktopCoordinates.left;
-			const int height = desc.DesktopCoordinates.bottom - desc.DesktopCoordinates.top;
+			const int width = r - l;
+			const int height = b - t;
 
 			qCDebug(grabber_screen_properties) << "Found video input" << i << "with name" << QString::fromWCharArray(desc.DeviceName)
 				<< "and size" << width << "x" << height;
@@ -742,6 +1025,29 @@ QJsonObject DDAGrabber::discover(const QJsonObject& params)
 					 },
 				 }},
 				});
+		}
+
+		// Add "All Displays" virtual entry when more than one output is present
+		if (videoInputs.size() >= 2)
+		{
+			videoInputs.append(QJsonObject{
+				{"inputIdx", videoInputs.size()},
+				{"name", "All Displays"},
+				{"virtual", true},
+				{"formats",
+				 QJsonArray{
+					 QJsonObject{
+						 {"resolutions",
+						  QJsonArray{
+							  QJsonObject{
+								  {"width",  vRight - vLeft},
+								  {"height", vBottom - vTop},
+								  {"fps", getFpsSupported()},
+							  },
+						  }},
+					 },
+				 }},
+			});
 		}
 
 		inputsDiscovered["video_inputs"] = videoInputs;

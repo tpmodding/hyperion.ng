@@ -69,6 +69,9 @@ private:
 
 	void computeCropBox(int sourceWidth, int sourceHeight, D3D11_BOX& box) const;
 
+	bool restartAllDisplaysCapture(int numOutputs);
+	int grabAllDisplaysFrame(Image<ColorRgb>& image);
+
 private:
 	std::unique_ptr<DDAGrabberImpl> d;
 };
