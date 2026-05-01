@@ -881,7 +881,7 @@ void JsonAPI::handleAdjustmentCommand(const QJsonObject &message, const JsonApiC
 	const QString adjustmentId = adjustment["id"].toString(adjustmentIds.first());
 	ColorAdjustment* colorAdjustment = hyperion->getAdjustment(adjustmentId);
 	if (colorAdjustment == nullptr) {
-		Warning(_log, "Incorrect adjustment identifier: %s", adjustmentId.toStdString().c_str());
+		sendErrorReply(QString("Incorrect adjustment identifier: %1").arg(adjustmentId), cmd);
 		return;
 	}
 
