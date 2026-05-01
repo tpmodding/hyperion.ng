@@ -113,9 +113,14 @@ void Grabber::setFlipMode(FlipMode mode)
 
 void Grabber::setCropping(int cropLeft, int cropRight, int cropTop, int cropBottom)
 {
-	if ((_width>0) && (_height>0) && (cropLeft + cropRight >= _width || cropTop + cropBottom >= _height))
+	// Validate against the original (pre-decimation) source dimensions.
+	// _width/_height hold the decimated output size, so multiply back to get the source size.
+	const int srcWidth  = (_pixelDecimation > 1 && _width  > 0) ? _width  * _pixelDecimation : _width;
+	const int srcHeight = (_pixelDecimation > 1 && _height > 0) ? _height * _pixelDecimation : _height;
+
+	if ((srcWidth > 0) && (srcHeight > 0) && (cropLeft + cropRight >= srcWidth || cropTop + cropBottom >= srcHeight))
 	{
-		Error(_log, "Rejecting invalid crop values: left: %d, right: %d, top: %d, bottom: %d, greater than or equal to width/height %d/%d", cropLeft, cropRight, cropTop, cropBottom, _width, _height);
+		Error(_log, "Rejecting invalid crop values: left: %d, right: %d, top: %d, bottom: %d, greater than or equal to source width/height %d/%d", cropLeft, cropRight, cropTop, cropBottom, srcWidth, srcHeight);
 		return;
 	}
 
@@ -135,7 +140,7 @@ void Grabber::setCropping(int cropLeft, int cropRight, int cropTop, int cropBott
 
 	if (cropLeft > 0 || cropRight > 0 || cropTop > 0 || cropBottom > 0)
 	{
-		Info(_log, "Cropping image: width=%d height=%d; crop: left=%d right=%d top=%d bottom=%d ", _width, _height, cropLeft, cropRight, cropTop, cropBottom);
+		Info(_log, "Cropping image: source=%dx%d output=%dx%d; crop: left=%d right=%d top=%d bottom=%d", srcWidth, srcHeight, _width, _height, cropLeft, cropRight, cropTop, cropBottom);
 		_isCropping = true;
 	}
 	else
