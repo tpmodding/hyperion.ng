@@ -122,6 +122,7 @@ public:
 		int ret = grabber.grabFrame(_image);
 		if (ret >= 0)
 		{
+			applyAspectRatio();
 			emit systemImage(_grabberName, _image);
 			return true;
 		}
@@ -205,6 +206,8 @@ private:
 	void handleSourceRequestVideo(hyperion::Components component, int hyperionInd, bool listen);
 	void handleSourceRequestAudio(hyperion::Components component, int hyperionInd, bool listen);
 
+	void applyAspectRatio();
+
 	Grabber *_ggrabber;
 	QString _grabberName;
 
@@ -216,4 +219,10 @@ private:
 
 	/// The image used for grabbing frames
 	Image<ColorRgb> _image;
+
+	/// Reusable buffer for aspect ratio padding
+	Image<ColorRgb> _paddedImage;
+
+	/// Target aspect ratio for black-border padding (0 = disabled)
+	float _targetAspectRatio = 0.0f;
 };

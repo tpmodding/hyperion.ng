@@ -3,6 +3,9 @@
 #include <hyperion/Grabber.h>
 #include <HyperionConfig.h>
 
+// std
+#include <cstring>
+
 // utils includes
 #include <utils/GlobalSignals.h>
 #include <events/EventHandler.h>
@@ -263,6 +266,34 @@ void GrabberWrapper::setCropping(int cropLeft, int cropRight, int cropTop, int c
 	_ggrabber->setCropping(cropLeft, cropRight, cropTop, cropBottom);
 }
 
+void GrabberWrapper::applyAspectRatio()
+{
+	if (_targetAspectRatio <= 0.0f)
+		return;
+
+	const int srcW = _image.width();
+	const int srcH = _image.height();
+	// Round to nearest even number to keep stride well-aligned
+	const int dstW = (static_cast<int>(srcH * _targetAspectRatio) + 1) & ~1;
+
+	if (dstW <= srcW)
+		return;
+
+	if (_paddedImage.width() != dstW || _paddedImage.height() != srcH)
+		_paddedImage.resize(dstW, srcH);
+
+	_paddedImage.clear(ColorRgb::BLACK);
+
+	const int offsetX = (dstW - srcW) / 2;
+	const ColorRgb* src = _image.memptr();
+	ColorRgb*       dst = _paddedImage.memptr();
+
+	for (int y = 0; y < srcH; ++y)
+		memcpy(dst + y * dstW + offsetX, src + y * srcW, static_cast<size_t>(srcW) * sizeof(ColorRgb));
+
+	_image.swap(_paddedImage);
+}
+
 void GrabberWrapper::updateTimer(int interval)
 {
 	if(_updateInterval_ms != interval)
@@ -316,6 +347,16 @@ void GrabberWrapper::handleSettingsUpdate(settings::type type, const QJsonDocume
 				obj["cropBottom"].toInt(0));
 
 			_ggrabber->setFramerate(obj["fps"].toInt(DEFAULT_RATE_HZ));
+
+			// aspect ratio padding
+			const QString ar = obj["aspectRatio"].toString("disabled");
+			if (ar == "4:3-to-16:9")
+				_targetAspectRatio = 16.0f / 9.0f;
+			else if (ar == "16:9-to-21:9")
+				_targetAspectRatio = 21.0f / 9.0f;
+			else
+				_targetAspectRatio = 0.0f;
+
 			// eval new update time
 			updateTimer(_ggrabber->getUpdateInterval());
 

@@ -137,6 +137,20 @@
 			"default": 0,
 			"append": "edt_append_pixel",
 			"propertyOrder": 17
+		},
+		"aspectRatio": {
+			"type": "string",
+			"title": "edt_conf_fg_aspectRatio_title",
+			"enum": [ "disabled", "4:3-to-16:9", "16:9-to-21:9" ],
+			"options": {
+				"enum_titles": [
+					"edt_conf_enum_disabled",
+					"edt_conf_fg_aspectRatio_4_3_to_16_9",
+					"edt_conf_fg_aspectRatio_16_9_to_21_9"
+				]
+			},
+			"default": "disabled",
+			"propertyOrder": 18
 		}
 	},
 	"additionalProperties" : false
