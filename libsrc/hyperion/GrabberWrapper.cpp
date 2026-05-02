@@ -225,6 +225,10 @@ QStringList GrabberWrapper::availableGrabbers(GrabberTypeFilter type)
 		#ifdef ENABLE_DRM
 				grabbers << "drm";
 		#endif
+
+		#ifdef ENABLE_PIPEWIRE
+				grabbers << "pipewire";
+		#endif
 	}
 
 	if (type == GrabberTypeFilter::VIDEO || type == GrabberTypeFilter::ALL)

@@ -45,3 +45,7 @@ endif(ENABLE_XCB)
 if(ENABLE_AUDIO)
 	add_subdirectory(audio)
 endif()
+
+if(ENABLE_PIPEWIRE)
+	add_subdirectory(pipewire)
+endif()

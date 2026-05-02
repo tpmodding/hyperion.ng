@@ -139,6 +139,7 @@ set(DEFAULT_V4L2                        OFF)
 set(DEFAULT_AUDIO                       ON)
 set(DEFAULT_X11                         OFF)
 set(DEFAULT_XCB                         OFF)
+set(DEFAULT_PIPEWIRE                    OFF)
 
 # Input
 set(DEFAULT_BOBLIGHT_SERVER             ON)
@@ -201,6 +202,7 @@ if(${CMAKE_SYSTEM} MATCHES "Linux")
 	set(DEFAULT_DEV_SPI         ON)
 	set(DEFAULT_DEV_TINKERFORGE ON)
 	set(DEFAULT_CEC             ON)
+	set(DEFAULT_PIPEWIRE        ON)
 elseif (WIN32)
 	set(DEFAULT_DDA             ON)
 	set(DEFAULT_MF              ON)
@@ -404,6 +406,9 @@ message(STATUS "ENABLE_XCB = ${ENABLE_XCB}")
 
 option(ENABLE_AUDIO "Enable the AUDIO grabber" ${DEFAULT_AUDIO})
 message(STATUS "ENABLE_AUDIO = ${ENABLE_AUDIO}")
+
+option(ENABLE_PIPEWIRE "Enable the PipeWire/Wayland screen grabber" ${DEFAULT_PIPEWIRE})
+message(STATUS "ENABLE_PIPEWIRE = ${ENABLE_PIPEWIRE}")
 
 removeIndent()
 

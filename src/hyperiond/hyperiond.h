@@ -85,6 +85,12 @@
 	using AudioWrapper = QObject;
 #endif
 
+#ifdef ENABLE_PIPEWIRE
+	#include <grabber/pipewire/PipewireWrapper.h>
+#else
+	using PipewireWrapper = QObject;
+#endif
+
 
 #include <utils/Logger.h>
 #include <utils/VideoMode.h>

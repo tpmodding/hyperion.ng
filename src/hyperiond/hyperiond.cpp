@@ -725,7 +725,7 @@ void HyperionDaemon::handleSettingsUpdate(settings::type settingsType, const QJs
 
 void HyperionDaemon::updateScreenGrabbers(const QJsonDocument& grabberConfig)
 {
-#if !defined(ENABLE_DISPMANX) && !defined(ENABLE_OSX) && !defined(ENABLE_FB) && !defined(ENABLE_X11) && !defined(ENABLE_XCB) && !defined(ENABLE_AMLOGIC) && !defined(ENABLE_QT) && !defined(ENABLE_DX) && !defined(ENABLE_DDA) && !defined(ENABLE_DRM)
+#if !defined(ENABLE_DISPMANX) && !defined(ENABLE_OSX) && !defined(ENABLE_FB) && !defined(ENABLE_X11) && !defined(ENABLE_XCB) && !defined(ENABLE_AMLOGIC) && !defined(ENABLE_QT) && !defined(ENABLE_DX) && !defined(ENABLE_DDA) && !defined(ENABLE_DRM) && !defined(ENABLE_PIPEWIRE)
 	_screenGrabber.reset();
 	Info(_log, "No screen capture supported on this platform");
 	return;
@@ -814,6 +814,12 @@ void HyperionDaemon::updateScreenGrabbers(const QJsonDocument& grabberConfig)
 			startGrabber<XcbWrapper>(_screenGrabber, grabberConfig);
 		}
 #endif
+#ifdef ENABLE_PIPEWIRE
+		else if (type == "pipewire")
+		{
+			startGrabber<PipewireWrapper>(_screenGrabber, grabberConfig);
+		}
+#endif
 		else
 		{
 			_screenGrabber.reset();
@@ -886,22 +892,35 @@ QString HyperionDaemon::evalScreenGrabberType()
 		}
 		else
 		{
-			// x11 -> if DISPLAY is set
-			QByteArray const envDisplay = qgetenv("DISPLAY");
-			if (!envDisplay.isEmpty())
+			// pipewire -> if WAYLAND_DISPLAY is set (Wayland session)
+			QByteArray const envWayland = qgetenv("WAYLAND_DISPLAY");
+			if (!envWayland.isEmpty())
 			{
-#if defined(ENABLE_X11)
-				type = "x11";
-#elif defined(ENABLE_XCB)
-				type = "xcb";
+#if defined(ENABLE_PIPEWIRE)
+				type = "pipewire";
 #else
 				type = "qt";
 #endif
 			}
-			// qt -> if nothing other applies
+			// x11 -> if DISPLAY is set
 			else
 			{
-				type = "qt";
+				QByteArray const envDisplay = qgetenv("DISPLAY");
+				if (!envDisplay.isEmpty())
+				{
+#if defined(ENABLE_X11)
+					type = "x11";
+#elif defined(ENABLE_XCB)
+					type = "xcb";
+#else
+					type = "qt";
+#endif
+				}
+				// qt -> if nothing other applies
+				else
+				{
+					type = "qt";
+				}
 			}
 		}
 	}

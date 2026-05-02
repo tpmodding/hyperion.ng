@@ -88,6 +88,7 @@ target_link_libraries(${PROJECT_NAME}
 	$<$<BOOL:${ENABLE_X11}>:x11-grabber>
 	$<$<BOOL:${ENABLE_XCB}>:xcb-grabber>
 	$<$<BOOL:${ENABLE_AUDIO}>:audio-grabber>
+	$<$<BOOL:${ENABLE_PIPEWIRE}>:pipewire-grabber>
 	# Input
 	$<$<BOOL:${ENABLE_FLATBUF_SERVER}>:flatbufserver>
 	$<$<BOOL:${ENABLE_PROTOBUF_SERVER}>:protoserver>
